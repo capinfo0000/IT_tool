@@ -93,6 +93,10 @@ function view_admin(array $businesses, string $baseUrl): string
     <label>店舗名
       <input name="name" required placeholder="例：○○整体院 △△店">
     </label>
+    <label>スラッグ（URL用・任意）
+      <input name="slug" placeholder="例：seitai-shibuya">
+      <small class="muted">依頼リンクは /r/（入力値）になります。空欄なら自動採番。半角英数とハイフンのみ。</small>
+    </label>
     <label>Googleクチコミ投稿URL
       <input name="googleReviewUrl" placeholder="https://search.google.com/local/writereview?placeid=...">
       <small class="muted">GoogleビジネスプロフィールのクチコミリンクをそのままでOK。後から変更できます。</small>
@@ -207,6 +211,10 @@ function view_dashboard(array $biz, array $stats, string $baseUrl): string
 
   <h2 class="no-print">店舗設定の変更</h2>
   <form class="form no-print" method="POST" action="/admin/business/{$bid}">
+    <label>スラッグ（URL用）
+      <input name="slug" value="{$slug}" placeholder="例：seitai-shibuya">
+      <small class="muted">依頼リンクは /r/（入力値）。変更すると既存のQR・リンクは使えなくなります。半角英数とハイフンのみ。</small>
+    </label>
     <label>Googleクチコミ投稿URL
       <input name="googleReviewUrl" value="{$url}" placeholder="https://search.google.com/local/writereview?placeid=...">
     </label>
@@ -247,11 +255,28 @@ function view_pop(array $biz, string $baseUrl): string
 <body>
 <div class="pop">
   <p class="pop-store">{$name}</p>
-  <h1 class="pop-head">本日の施術は<br>いかがでしたか？</h1>
-  <p class="pop-sub">QRコードを読み取って<br>★で評価をお願いします 🙏</p>
+  <h1 class="pop-head">クチコミに<br>ご協力ください 🙏</h1>
   <img class="pop-qr" src="{$qrEsc}" alt="口コミQRコード">
-  <p class="pop-foot">スマホのカメラをQRにかざすだけ・約30秒</p>
-  <button class="btn primary no-print pop-print" type="button" onclick="window.print()">この内容を印刷する</button>
+  <ol class="pop-steps">
+    <li><span class="num">1</span>スマホのカメラでQRを読み取る</li>
+    <li><span class="num">2</span>★で評価する</li>
+    <li><span class="num">3</span>そのままGoogleに投稿</li>
+  </ol>
+  <p class="pop-foot">所要 約30秒 ／ アプリ不要</p>
+</div>
+
+<div class="staff-card">
+  <p class="staff-title">【スタッフ用】会計時の声かけ例</p>
+  <p class="staff-quote">「当院いまクチコミを集めていまして、もしよろしければ、こちらのQRから30秒ほどでご感想をいただけませんか？ 今後の励みになります🙏」</p>
+  <ul class="staff-tips">
+    <li>施術後〜会計の<strong>満足度が高い瞬間</strong>にひと声。</li>
+    <li>お客様<strong>ご自身のスマホ</strong>で読み取ってもらう（Googleにそのまま投稿できます）。</li>
+    <li>無理強いはしない。<strong>割引等と引き換えの依頼はNG</strong>（景品表示法）。</li>
+  </ul>
+</div>
+
+<div class="pop-actions no-print">
+  <button class="btn primary" type="button" onclick="window.print()">印刷する</button>
 </div>
 </body>
 </html>

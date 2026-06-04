@@ -151,3 +151,15 @@ body.cust { background: #eef1f6; }
 /* 完了画面のチェック */
 .check-circle { width: 64px; height: 64px; border-radius: 50%; background: var(--primary); color: #fff;
   font-size: 34px; line-height: 64px; margin: 6px auto 14px; }
+
+/* POP 3ステップ & スタッフ用カード */
+.pop-steps { list-style: none; max-width: 320px; margin: 18px auto 4px; padding: 0; text-align: left; }
+.pop-steps li { display: flex; align-items: center; gap: 12px; font-size: 17px; padding: 7px 0; }
+.pop-steps .num { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: #fff; font-weight: 800; text-align: center; line-height: 30px; }
+.staff-card { max-width: 480px; margin: 18px auto; padding: 18px 20px; background: #fffdf5; border: 1px solid #f0e6c0; border-radius: 14px; }
+.staff-title { font-weight: 800; margin: 0 0 8px; }
+.staff-quote { background: #fff; border-left: 4px solid var(--gold); padding: 10px 12px; border-radius: 6px; margin: 0 0 10px; }
+.staff-tips { margin: 0; padding-left: 18px; color: #4b5563; font-size: 14px; }
+.staff-tips li { margin: 4px 0; }
+.pop-actions { text-align: center; margin: 16px 0 30px; }
+@media print { .staff-card { page-break-before: always; } }

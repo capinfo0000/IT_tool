@@ -81,13 +81,36 @@ function now_iso(): string
     return (new DateTime('now', new DateTimeZone('Asia/Tokyo')))->format('c');
 }
 
-function slugify(string $name): string
+function normalize_slug(string $s): string
 {
-    $base = strtolower(trim($name));
-    $base = preg_replace('/[^a-z0-9]+/u', '-', $base);
-    $base = trim($base, '-');
-    if ($base === '' || $base === null) $base = 'shop';
-    return $base . '-' . bin2hex(random_bytes(2));
+    $s = strtolower(trim($s));
+    $s = preg_replace('/[^a-z0-9]+/', '-', $s);
+    return trim($s, '-');
+}
+
+function slug_exists(string $slug, ?int $exceptId = null): bool
+{
+    if ($exceptId === null) {
+        $st = db()->prepare("SELECT COUNT(*) AS c FROM businesses WHERE slug = ?");
+        $st->execute([$slug]);
+    } else {
+        $st = db()->prepare("SELECT COUNT(*) AS c FROM businesses WHERE slug = ? AND id <> ?");
+        $st->execute([$slug, $exceptId]);
+    }
+    return ((int)$st->fetch()['c']) > 0;
+}
+
+/** 重複しないスラッグを返す（取られていれば -2, -3 … を付与） */
+function ensure_unique_slug(string $slug, ?int $exceptId = null): string
+{
+    if ($slug === '') $slug = 'shop';
+    $base = $slug;
+    $i = 2;
+    while (slug_exists($slug, $exceptId)) {
+        $slug = $base . '-' . $i;
+        $i++;
+    }
+    return $slug;
 }
 
 // ---- businesses ----
@@ -113,23 +136,33 @@ function get_business_by_id($id): ?array
     return $row ?: null;
 }
 
-function create_business(string $name, string $url, int $threshold, string $mode): array
+function create_business(string $name, string $url, int $threshold, string $mode, string $slug = ''): array
 {
     $mode = $mode === 'compliant' ? 'compliant' : 'improve';
     $threshold = $threshold ?: 4;
-    $slug = slugify($name);
+    $slug = normalize_slug($slug);
+    if ($slug === '') $slug = normalize_slug($name); // 日本語店名は空になるのでフォールバック
+    $slug = ensure_unique_slug($slug);
     $st = db()->prepare("INSERT INTO businesses (slug, name, google_review_url, threshold, mode, created_at)
                          VALUES (?, ?, ?, ?, ?, ?)");
     $st->execute([$slug, trim($name), trim($url), $threshold, $mode, now_iso()]);
     return get_business_by_slug($slug);
 }
 
-function update_business($id, string $url, int $threshold, string $mode): ?array
+function update_business($id, string $url, int $threshold, string $mode, string $slug = ''): ?array
 {
     $mode = $mode === 'compliant' ? 'compliant' : 'improve';
     $threshold = $threshold ?: 4;
-    $st = db()->prepare("UPDATE businesses SET google_review_url = ?, threshold = ?, mode = ? WHERE id = ?");
-    $st->execute([trim($url), $threshold, $mode, (int)$id]);
+    $slug = normalize_slug($slug);
+    if ($slug !== '') {
+        // スラッグ指定があれば重複を避けて更新
+        $slug = ensure_unique_slug($slug, (int)$id);
+        $st = db()->prepare("UPDATE businesses SET google_review_url = ?, threshold = ?, mode = ?, slug = ? WHERE id = ?");
+        $st->execute([trim($url), $threshold, $mode, $slug, (int)$id]);
+    } else {
+        $st = db()->prepare("UPDATE businesses SET google_review_url = ?, threshold = ?, mode = ? WHERE id = ?");
+        $st->execute([trim($url), $threshold, $mode, (int)$id]);
+    }
     return get_business_by_id($id);
 }
 

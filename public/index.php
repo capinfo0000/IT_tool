@@ -106,7 +106,8 @@ if ($path === '/admin/business' && $method === 'POST') {
         $name,
         $_POST['googleReviewUrl'] ?? '',
         (int)($_POST['threshold'] ?? 4),
-        $_POST['mode'] ?? 'improve'
+        $_POST['mode'] ?? 'improve',
+        $_POST['slug'] ?? ''
     );
     redirect('/admin');
     return;
@@ -136,7 +137,8 @@ if (preg_match('#^/admin/business/(\d+)$#', $path, $m) && $method === 'POST') {
         (int)$m[1],
         $_POST['googleReviewUrl'] ?? '',
         (int)($_POST['threshold'] ?? 4),
-        $_POST['mode'] ?? 'improve'
+        $_POST['mode'] ?? 'improve',
+        $_POST['slug'] ?? ''
     );
     redirect('/admin/business/' . (int)$m[1]);
     return;
