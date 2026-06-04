@@ -157,37 +157,49 @@ if (preg_match('#^/r/([^/]+)$#', $path, $m)) {
         $bizId = (int)$biz['id'];
         $url = trim((string)$biz['google_review_url']);
 
-        if ($biz['mode'] === 'compliant') {
-            record_rating($bizId, $rating, 'google');
-            if ($url !== '') { redirect($url); return; }
-            send(view_thanks('public'));
-            return;
-        }
+        // しきい値以上、またはコンプラ重視モードはGoogle誘導
+        $toGoogle = ($biz['mode'] === 'compliant') || ($rating >= (int)$biz['threshold']);
 
-        if ($rating >= (int)$biz['threshold']) {
+        if ($toGoogle) {
             record_rating($bizId, $rating, 'google');
-            if ($url !== '') { redirect($url); return; }
-            send(view_thanks('public'));
+            if ($url === '') { send(view_thanks($biz, 'public')); return; }
+            send(view_rate_result($biz, $rating, 'google'));
             return;
         }
 
         record_rating($bizId, $rating, 'private');
-        send(view_feedback_form($biz, $rating));
+        send(view_rate_result($biz, $rating, 'private'));
         return;
     }
 }
 
-// 顧客：非公開フィードバック送信
-if (preg_match('#^/r/([^/]+)/feedback$#', $path, $m) && $method === 'POST') {
+// 顧客：非公開フィードバック（GET=フォーム表示 / POST=送信）
+if (preg_match('#^/r/([^/]+)/feedback$#', $path, $m)) {
     $biz = get_business_by_slug(rawurldecode($m[1]));
     if (!$biz) { send(view_not_found(), 404); return; }
-    record_feedback(
-        (int)$biz['id'],
-        (int)($_POST['rating'] ?? 0),
-        $_POST['message'] ?? '',
-        $_POST['contact'] ?? ''
-    );
-    send(view_thanks('private'));
+
+    if ($method === 'GET') {
+        $rating = max(0, min(5, (int)($_GET['rating'] ?? 0)));
+        send(view_feedback_form($biz, $rating));
+        return;
+    }
+    if ($method === 'POST') {
+        record_feedback(
+            (int)$biz['id'],
+            (int)($_POST['rating'] ?? 0),
+            $_POST['message'] ?? '',
+            $_POST['contact'] ?? ''
+        );
+        send(view_thanks($biz, 'private'));
+        return;
+    }
+}
+
+// 顧客：完了画面（「後で」「スキップ」用）
+if (preg_match('#^/r/([^/]+)/done$#', $path, $m) && $method === 'GET') {
+    $biz = get_business_by_slug(rawurldecode($m[1]));
+    if (!$biz) { send(view_not_found(), 404); return; }
+    send(view_thanks($biz, 'public'));
     return;
 }
 

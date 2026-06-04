@@ -258,63 +258,125 @@ function view_pop(array $biz, string $baseUrl): string
 HTML;
 }
 
+/** お客様向けの軽量レイアウト（管理ヘッダ無し・クリーンなカード） */
+function customer_layout(string $title, string $brand, string $body): string
+{
+    $t = esc($title);
+    $b = esc($brand);
+    return <<<HTML
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{$t}</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="cust">
+<div class="cust-wrap">
+  <div class="cust-card">
+    <p class="cust-brand">★ {$b}</p>
+    {$body}
+  </div>
+</div>
+</body>
+</html>
+HTML;
+}
+
+/** Google公式風のGロゴ（インラインSVG） */
+function google_g_svg(): string
+{
+    return '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+        . '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>'
+        . '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'
+        . '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'
+        . '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>'
+        . '</svg>';
+}
+
 function view_rate(array $biz): string
 {
     $slug = esc($biz['slug']);
-    $name = esc($biz['name']);
     $buttons = '';
     foreach ([1, 2, 3, 4, 5] as $n) {
-        $buttons .= '<button class="star-btn" type="submit" name="rating" value="' . $n . '">'
-            . stars(5, $n) . '<span class="star-num">' . $n . '</span></button>';
+        $buttons .= '<button type="submit" name="rating" value="' . $n . '">'
+            . '<span class="st">★</span><span class="stn">' . $n . '</span></button>';
     }
     $body = <<<HTML
-  <section class="rate">
-    <h1>{$name}</h1>
-    <p class="lead">本日はご来店ありがとうございました。<br>ご満足度を★で教えてください。<br><span class="muted">（約30秒で完了します）</span></p>
-    <form method="POST" action="/r/{$slug}" class="star-form">
-      {$buttons}
-    </form>
-  </section>
+  <p class="cust-hello">ご来店ありがとうございました！</p>
+  <h1 class="cust-h">サービスはいかがでしたか？</h1>
+  <p class="cust-sub">星をタップして評価してください</p>
+  <form method="POST" action="/r/{$slug}" class="stars-pick">
+    {$buttons}
+  </form>
+  <p class="cust-note">いただいたご意見は、サービス向上のために活用します。</p>
 HTML;
-    return layout($biz['name'] . ' のご感想', $body);
+    return customer_layout($biz['name'] . ' のご感想', $biz['name'], $body);
+}
+
+/** 評価後の結果画面（高評価→Google誘導 / 低評価→フィードバックへ） */
+function view_rate_result(array $biz, int $rating, string $dest): string
+{
+    $slug = esc($biz['slug']);
+    $url = esc($biz['google_review_url']);
+    $show = '<div class="stars-show">' . esc(stars(5, $rating)) . '</div>';
+
+    if ($dest === 'google') {
+        $g = google_g_svg();
+        $body = <<<HTML
+  <h1 class="cust-h">ご評価ありがとうございました！</h1>
+  {$show}
+  <p class="cust-sub">素晴らしいご評価をありがとうございます！<br>Googleのクチコミ投稿にご協力ください。</p>
+  <a class="google-btn" href="{$url}">{$g}<span>Googleクチコミを投稿する</span></a>
+  <p style="margin-top:14px"><a class="cust-link" href="/r/{$slug}/done">後で投稿する</a></p>
+HTML;
+    } else {
+        $body = <<<HTML
+  <h1 class="cust-h">ご意見をお聞かせください</h1>
+  {$show}
+  <p class="cust-sub">より良いお店にするために、<br>率直なご意見をお聞かせください。</p>
+  <a class="btn primary block" href="/r/{$slug}/feedback?rating={$rating}">フィードバックを送信する</a>
+  <p style="margin-top:14px"><a class="cust-link" href="/r/{$slug}/done">後で送る</a></p>
+HTML;
+    }
+    return customer_layout($biz['name'], $biz['name'], $body);
 }
 
 function view_feedback_form(array $biz, int $rating): string
 {
     $slug = esc($biz['slug']);
-    $star = esc(stars(5, $rating));
     $body = <<<HTML
-  <section class="rate">
-    <h1>貴重なご意見をお聞かせください</h1>
-    <p class="lead">{$star}<br>至らぬ点があり申し訳ございません。改善のため、よろしければ詳しくお聞かせください。<strong>この内容は公開されません。</strong></p>
-    <form method="POST" action="/r/{$slug}/feedback" class="form">
-      <input type="hidden" name="rating" value="{$rating}">
-      <label>ご意見・改善してほしい点
-        <textarea name="message" rows="5" placeholder="気になった点を教えてください"></textarea>
-      </label>
-      <label>ご連絡先（任意。お返事が必要な場合）
-        <input name="contact" placeholder="メール または 電話番号">
-      </label>
-      <button class="btn primary" type="submit">送信する</button>
-    </form>
-  </section>
+  <h1 class="cust-h">ご意見をお聞かせください</h1>
+  <p class="cust-sub">ご記入いただいた内容は、店舗の改善のみに利用し、公開されることはありません。</p>
+  <form method="POST" action="/r/{$slug}/feedback" class="form left">
+    <input type="hidden" name="rating" value="{$rating}">
+    <label>ご意見・ご感想（任意）
+      <textarea name="message" rows="4" placeholder="ご自由にご記入ください"></textarea>
+    </label>
+    <label>ご連絡先（任意）
+      <input name="contact" placeholder="メールアドレスなど">
+    </label>
+    <button class="btn primary block" type="submit">送信する</button>
+  </form>
+  <p style="margin-top:14px"><a class="cust-link" href="/r/{$slug}/done">スキップする</a></p>
 HTML;
-    return layout('ご意見をお聞かせください', $body);
+    return customer_layout('ご意見をお聞かせください', $biz['name'], $body);
 }
 
-function view_thanks(string $kind): string
+function view_thanks(array $biz, string $kind): string
 {
     $msg = $kind === 'private'
-        ? 'ご意見ありがとうございました。今後の改善に活かしてまいります。'
-        : 'ありがとうございました。';
+        ? 'ご意見は店舗の改善に役立たせていただきます。今後ともよろしくお願いいたします。'
+        : 'ありがとうございました。今後ともよろしくお願いいたします。';
     $msg = esc($msg);
     $body = <<<HTML
-  <section class="rate center">
-    <h1>ありがとうございました 🙏</h1>
-    <p class="lead">{$msg}</p>
-  </section>
+  <div class="check-circle">✓</div>
+  <h1 class="cust-h">ありがとうございました</h1>
+  <p class="cust-sub">{$msg}</p>
+  <p><a class="btn ghost" href="#" onclick="window.close();return false;">閉じる</a></p>
 HTML;
-    return layout('ありがとうございました', $body);
+    return customer_layout('ありがとうございました', $biz['name'], $body);
 }
 
 function view_not_found(): string
