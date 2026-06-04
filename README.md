@@ -31,15 +31,24 @@ docs/企画書.md    市場分析・競合優位性・収益試算・ロード�
 
 PHP 8 系（`pdo_sqlite` 有効）があれば、設定なしでそのまま起動できます（SQLite）。
 
+**かんたん起動（推奨）**
 ```bash
-php -S 127.0.0.1:8000 -t public public/index.php
-# → http://127.0.0.1:8000/admin
+./start.sh        # Mac/Linux（ダブルクリックでも可）
+start.bat         # Windows（ダブルクリック）
+```
+→ ブラウザで **http://localhost:8080/** を開く（管理画面は `/admin`）。停止は Ctrl+C。
+
+**手動で起動する場合**
+```bash
+php -S 127.0.0.1:8080 -t public public/index.php
 ```
 
-1. `http://127.0.0.1:8000/admin` を開く
+1. `http://localhost:8080/` を開く
 2. 「店舗を新規登録」から店名・Googleクチコミ投稿URLを登録
 3. 発行された依頼リンク `/r/{slug}` をお客様へ
-4. ダッシュボードで結果を確認
+4. ダッシュボードで結果を確認（ログインPWは `src/config.php` の `admin_password`、未作成時はサンプルの `change-me-please`）
+
+> ⚠️ `http://localhost:8080/` は **このスクリプトを実行したPC上**で開けます（クラウド側で動かしても手元のブラウザからは見えません）。
 
 ## コアサーバー V2 への配置（本番）
 
