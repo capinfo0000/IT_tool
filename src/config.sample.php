@@ -6,6 +6,9 @@
  * ローカルでもそのまま動く。
  */
 return [
+    // 管理画面のログインパスワード（本番では必ず変更すること）
+    'admin_password' => 'change-me-please',
+
     // 'sqlite'（ローカル開発） または 'mysql'（コアサーバーV2 本番）
     'driver' => 'sqlite',
 

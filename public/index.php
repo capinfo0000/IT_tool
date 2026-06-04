@@ -17,8 +17,22 @@ if (PHP_SAPI === 'cli-server') {
 require __DIR__ . '/../src/db.php';
 require __DIR__ . '/../src/views.php';
 
+session_start();
 init_schema();
 seed_if_empty();
+
+function is_logged_in(): bool
+{
+    return !empty($_SESSION['auth']);
+}
+
+function require_login(): void
+{
+    if (!is_logged_in()) {
+        redirect('/login');
+        exit;
+    }
+}
 
 function base_url(): string
 {
@@ -52,12 +66,37 @@ if ($path === '/' && $method === 'GET') {
     return;
 }
 
+// ログイン
+if ($path === '/login' && $method === 'GET') {
+    send(view_login());
+    return;
+}
+if ($path === '/login' && $method === 'POST') {
+    $pw = (string)($_POST['password'] ?? '');
+    if (hash_equals((string)(config()['admin_password'] ?? ''), $pw) && $pw !== '') {
+        session_regenerate_id(true);
+        $_SESSION['auth'] = true;
+        redirect('/admin');
+        return;
+    }
+    send(view_login('パスワードが違います。'), 401);
+    return;
+}
+if ($path === '/logout') {
+    $_SESSION = [];
+    session_destroy();
+    redirect('/');
+    return;
+}
+
 if ($path === '/admin' && $method === 'GET') {
+    require_login();
     send(view_admin(list_businesses(), base_url()));
     return;
 }
 
 if ($path === '/admin/business' && $method === 'POST') {
+    require_login();
     $name = trim($_POST['name'] ?? '');
     if ($name === '') {
         send(view_admin(list_businesses(), base_url()), 400);
@@ -74,9 +113,24 @@ if ($path === '/admin/business' && $method === 'POST') {
 }
 
 if (preg_match('#^/admin/business/(\d+)$#', $path, $m) && $method === 'GET') {
+    require_login();
     $biz = get_business_by_id((int)$m[1]);
     if (!$biz) { send(view_not_found(), 404); return; }
     send(view_dashboard($biz, stats_for((int)$biz['id']), base_url()));
+    return;
+}
+
+if (preg_match('#^/admin/business/(\d+)$#', $path, $m) && $method === 'POST') {
+    require_login();
+    $biz = get_business_by_id((int)$m[1]);
+    if (!$biz) { send(view_not_found(), 404); return; }
+    update_business(
+        (int)$m[1],
+        $_POST['googleReviewUrl'] ?? '',
+        (int)($_POST['threshold'] ?? 4),
+        $_POST['mode'] ?? 'improve'
+    );
+    redirect('/admin/business/' . (int)$m[1]);
     return;
 }
 

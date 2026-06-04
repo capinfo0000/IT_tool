@@ -80,6 +80,7 @@ function view_admin(array $businesses, string $baseUrl): string
     }
 
     $body = <<<HTML
+  <p style="text-align:right"><a href="/logout">ログアウト</a></p>
   <h1>管理画面</h1>
   <h2>登録店舗</h2>
   <table class="table">
@@ -116,9 +117,28 @@ HTML;
     return layout('管理画面', $body);
 }
 
+function view_login(string $error = ''): string
+{
+    $err = $error !== '' ? '<p class="note" style="color:#b91c1c">' . esc($error) . '</p>' : '';
+    $body = <<<HTML
+  <section class="rate" style="max-width:420px">
+    <h1>管理画面ログイン</h1>
+    {$err}
+    <form class="form" method="POST" action="/login">
+      <label>パスワード
+        <input type="password" name="password" required autofocus>
+      </label>
+      <button class="btn primary" type="submit">ログイン</button>
+    </form>
+  </section>
+HTML;
+    return layout('ログイン', $body);
+}
+
 function view_dashboard(array $biz, array $stats, string $baseUrl): string
 {
     $link = $baseUrl . '/r/' . $biz['slug'];
+    $qr = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=' . rawurlencode($link);
 
     if ($stats['feedback']) {
         $fbRows = '';
@@ -139,20 +159,36 @@ function view_dashboard(array $biz, array $stats, string $baseUrl): string
 
     $name = esc($biz['name']);
     $linkEsc = esc($link);
+    $qrEsc = esc($qr);
     $slug = esc($biz['slug']);
     $total = (int)$stats['total'];
     $avg = $stats['avg'];
     $toGoogle = (int)$stats['toGoogle'];
     $toPrivate = (int)$stats['toPrivate'];
+    $url = esc($biz['google_review_url']);
+    $bid = (int)$biz['id'];
+    $thr = (int)$biz['threshold'];
+    $selImprove = $biz['mode'] === 'improve' ? 'selected' : '';
+    $selCompliant = $biz['mode'] === 'compliant' ? 'selected' : '';
+    $sel3 = $thr === 3 ? 'selected' : '';
+    $sel4 = $thr === 4 ? 'selected' : '';
+    $sel5 = $thr === 5 ? 'selected' : '';
 
     $body = <<<HTML
-  <p><a href="/admin">← 店舗一覧へ</a></p>
+  <p><a href="/admin">← 店舗一覧へ</a> ・ <a href="/logout">ログアウト</a></p>
   <h1>{$name}</h1>
 
   <div class="share">
-    <strong>お客様に渡す依頼リンク：</strong>
-    <code>{$linkEsc}</code>
-    <a class="btn small" href="/r/{$slug}" target="_blank">開いて確認</a>
+    <div class="qr">
+      <img src="{$qrEsc}" alt="依頼リンクのQRコード" width="160" height="160">
+      <button class="btn small" type="button" onclick="window.print()">QRを印刷</button>
+    </div>
+    <div class="share-link">
+      <strong>お客様に渡す依頼リンク：</strong>
+      <code>{$linkEsc}</code>
+      <p><a class="btn small" href="/r/{$slug}" target="_blank">開いて確認</a></p>
+      <p class="muted">レジ横・名刺・LINEでQRやリンクを配布してください。</p>
+    </div>
   </div>
 
   <section class="kpis">
@@ -167,6 +203,27 @@ function view_dashboard(array $biz, array $stats, string $baseUrl): string
     <thead><tr><th>評価</th><th>コメント</th><th>連絡先</th><th>日時</th></tr></thead>
     <tbody>{$fbRows}</tbody>
   </table>
+
+  <h2 class="no-print">店舗設定の変更</h2>
+  <form class="form no-print" method="POST" action="/admin/business/{$bid}">
+    <label>Googleクチコミ投稿URL
+      <input name="googleReviewUrl" value="{$url}" placeholder="https://search.google.com/local/writereview?placeid=...">
+    </label>
+    <label>Google誘導のしきい値
+      <select name="threshold">
+        <option value="5" {$sel5}>★5のみ</option>
+        <option value="4" {$sel4}>★4以上</option>
+        <option value="3" {$sel3}>★3以上</option>
+      </select>
+    </label>
+    <label>運用モード
+      <select name="mode">
+        <option value="improve" {$selImprove}>改善フォーカス（低評価は非公開回収）</option>
+        <option value="compliant" {$selCompliant}>コンプラ重視（全員にGoogle案内）</option>
+      </select>
+    </label>
+    <button class="btn primary" type="submit">設定を保存</button>
+  </form>
 HTML;
     return layout($biz['name'] . ' ダッシュボード', $body);
 }

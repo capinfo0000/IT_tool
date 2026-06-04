@@ -124,6 +124,15 @@ function create_business(string $name, string $url, int $threshold, string $mode
     return get_business_by_slug($slug);
 }
 
+function update_business($id, string $url, int $threshold, string $mode): ?array
+{
+    $mode = $mode === 'compliant' ? 'compliant' : 'improve';
+    $threshold = $threshold ?: 4;
+    $st = db()->prepare("UPDATE businesses SET google_review_url = ?, threshold = ?, mode = ? WHERE id = ?");
+    $st->execute([trim($url), $threshold, $mode, (int)$id]);
+    return get_business_by_id($id);
+}
+
 // ---- ratings / feedback ----
 
 function record_rating(int $businessId, int $rating, string $routedTo): void
