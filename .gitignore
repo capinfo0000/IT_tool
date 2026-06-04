@@ -5,5 +5,8 @@ src/config.php
 data/*.sqlite
 data/db.json
 
+# プレビュー用に書き出した画面スナップショット
+preview/
+
 *.log
 .DS_Store
