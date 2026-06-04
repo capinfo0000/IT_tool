@@ -117,7 +117,17 @@ if (preg_match('#^/admin/business/(\d+)$#', $path, $m) && $method === 'GET') {
     require_login();
     $biz = get_business_by_id((int)$m[1]);
     if (!$biz) { send(view_not_found(), 404); return; }
-    send(view_dashboard($biz, stats_for((int)$biz['id']), base_url()));
+    send(view_dashboard($biz, stats_for((int)$biz['id']), get_google_snapshots((int)$biz['id']), base_url()));
+    return;
+}
+
+// 管理：Google口コミの手動記録
+if (preg_match('#^/admin/business/(\d+)/google-snapshot$#', $path, $m) && $method === 'POST') {
+    require_login();
+    $biz = get_business_by_id((int)$m[1]);
+    if (!$biz) { send(view_not_found(), 404); return; }
+    add_google_snapshot((int)$m[1], (int)($_POST['total'] ?? 0), (float)($_POST['avg'] ?? 0));
+    redirect('/admin/business/' . (int)$m[1]);
     return;
 }
 

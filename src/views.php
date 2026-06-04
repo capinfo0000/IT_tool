@@ -139,7 +139,7 @@ HTML;
     return layout('ログイン', $body);
 }
 
-function view_dashboard(array $biz, array $stats, string $baseUrl): string
+function view_dashboard(array $biz, array $stats, array $snapshots, string $baseUrl): string
 {
     $link = $baseUrl . '/r/' . $biz['slug'];
     $qr = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=' . rawurlencode($link);
@@ -178,6 +178,47 @@ function view_dashboard(array $biz, array $stats, string $baseUrl): string
     $sel4 = $thr === 4 ? 'selected' : '';
     $sel5 = $thr === 5 ? 'selected' : '';
 
+    // Google口コミの手動記録ブロック
+    $latest = $snapshots[0] ?? null;
+    $prev = $snapshots[1] ?? null;
+    if ($latest) {
+        $gc = (int)$latest['total_count'];
+        $ga = number_format((float)$latest['average_rating'], 1);
+        $deltaTxt = '';
+        if ($prev) {
+            $d = $gc - (int)$prev['total_count'];
+            $deltaTxt = '<span class="lbl">前回比 ' . ($d >= 0 ? '+' : '') . $d . '件</span>';
+        }
+        $gStat = '<div class="kpis">'
+            . '<div class="kpi"><span class="num">' . $gc . '</span><span class="lbl">Google口コミ数</span>' . $deltaTxt . '</div>'
+            . '<div class="kpi"><span class="num">' . $ga . '</span><span class="lbl">Google平均★</span></div>'
+            . '</div>';
+        $hist = '';
+        foreach ($snapshots as $s) {
+            $hist .= '<tr><td class="muted">' . esc(substr($s['taken_at'], 0, 10)) . '</td><td>'
+                . (int)$s['total_count'] . '</td><td>' . number_format((float)$s['average_rating'], 1) . '</td></tr>';
+        }
+        $histTable = '<table class="table no-print"><thead><tr><th>記録日</th><th>口コミ数</th><th>平均★</th></tr></thead><tbody>' . $hist . '</tbody></table>';
+    } else {
+        $gStat = '<p class="muted">まだ記録がありません。Googleマップで自店の「口コミ N件・★X.X」を確認して、下に記録してください。</p>';
+        $histTable = '';
+    }
+    $googleBlock = <<<G
+  <h2 class="no-print">Google上の口コミ（手動記録）</h2>
+  <p class="muted no-print">Googleマップの自店ページで件数・平均★を確認して記録します。将来はAPI連携で自動取得予定。</p>
+  {$gStat}
+  {$histTable}
+  <form class="form no-print" method="POST" action="/admin/business/{$bid}/google-snapshot">
+    <label>Google口コミ数
+      <input type="number" name="total" min="0" required placeholder="例：128">
+    </label>
+    <label>Google平均★
+      <input type="number" name="avg" min="0" max="5" step="0.1" required placeholder="例：4.3">
+    </label>
+    <button class="btn primary" type="submit">記録する</button>
+  </form>
+G;
+
     $body = <<<HTML
   <p><a href="/admin">← 店舗一覧へ</a> ・ <a href="/logout">ログアウト</a></p>
   <h1>{$name}</h1>
@@ -202,6 +243,8 @@ function view_dashboard(array $biz, array $stats, string $baseUrl): string
     <div class="kpi"><span class="num">{$toGoogle}</span><span class="lbl">Google誘導</span></div>
     <div class="kpi"><span class="num">{$toPrivate}</span><span class="lbl">非公開回収</span></div>
   </section>
+
+  {$googleBlock}
 
   <h2>非公開フィードバック（改善のヒント）</h2>
   <table class="table">

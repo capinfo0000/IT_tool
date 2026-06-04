@@ -47,6 +47,7 @@ function init_schema(): void
 {
     $pk = is_mysql() ? 'INT AUTO_INCREMENT PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
     $slug = is_mysql() ? 'VARCHAR(190)' : 'TEXT';
+    $avgType = is_mysql() ? 'DECIMAL(3,2)' : 'REAL';
 
     db()->exec("CREATE TABLE IF NOT EXISTS businesses (
         id $pk,
@@ -73,6 +74,15 @@ function init_schema(): void
         message TEXT,
         contact TEXT,
         created_at TEXT NOT NULL
+    )");
+
+    // Google口コミの手動記録（将来 Business Profile API が自動で埋める枠）
+    db()->exec("CREATE TABLE IF NOT EXISTS google_snapshots (
+        id $pk,
+        business_id INT NOT NULL,
+        total_count INT NOT NULL,
+        average_rating $avgType NOT NULL,
+        taken_at TEXT NOT NULL
     )");
 }
 
@@ -202,6 +212,26 @@ function stats_for(int $businessId): array
         'toPrivate' => $toPrivate,
         'feedback'  => $fb->fetchAll(),
     ];
+}
+
+// ---- Google口コミの手動スナップショット ----
+
+function add_google_snapshot(int $bizId, int $total, float $avg): void
+{
+    $avg = max(0, min(5, $avg));
+    $total = max(0, $total);
+    $st = db()->prepare("INSERT INTO google_snapshots (business_id, total_count, average_rating, taken_at) VALUES (?, ?, ?, ?)");
+    $st->execute([$bizId, $total, $avg, now_iso()]);
+}
+
+/** 新しい順にスナップショットを返す */
+function get_google_snapshots(int $bizId, int $limit = 12): array
+{
+    $st = db()->prepare("SELECT * FROM google_snapshots WHERE business_id = ? ORDER BY taken_at DESC, id DESC LIMIT ?");
+    $st->bindValue(1, $bizId, PDO::PARAM_INT);
+    $st->bindValue(2, $limit, PDO::PARAM_INT);
+    $st->execute();
+    return $st->fetchAll();
 }
 
 function seed_if_empty(): void
