@@ -1,4 +1,9 @@
-node_modules/
+# 実設定（本番DB認証情報）はコミットしない
+src/config.php
+
+# ローカルのSQLiteデータ
+data/*.sqlite
 data/db.json
+
 *.log
 .DS_Store
