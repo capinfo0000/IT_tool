@@ -175,6 +175,13 @@ function seed_if_empty(): void
 {
     $count = (int)db()->query("SELECT COUNT(*) AS c FROM businesses")->fetch()['c'];
     if ($count === 0) {
-        create_business('デモ整体院', 'https://search.google.com/local/writereview?placeid=DEMO', 4, 'improve');
+        $b = create_business('デモ整体院', 'https://search.google.com/local/writereview?placeid=DEMO', 4, 'improve');
+        $id = (int)$b['id'];
+        // デモが映えるよう、サンプルの評価とフィードバックを投入
+        foreach ([5, 5, 4, 5, 5, 4] as $r) record_rating($id, $r, 'google');
+        record_rating($id, 2, 'private');
+        record_rating($id, 3, 'private');
+        record_feedback($id, 2, '受付の待ち時間が少し長く感じました。次回は予約時間を調整してもらえると嬉しいです。', '');
+        record_feedback($id, 3, '駐車場の場所が分かりにくかったです。案内があると助かります。', 'sample@example.com');
     }
 }

@@ -181,13 +181,14 @@ function view_dashboard(array $biz, array $stats, string $baseUrl): string
   <div class="share">
     <div class="qr">
       <img src="{$qrEsc}" alt="依頼リンクのQRコード" width="160" height="160">
-      <button class="btn small" type="button" onclick="window.print()">QRを印刷</button>
+      <a class="btn small" href="/admin/business/{$bid}/pop" target="_blank">POPを印刷</a>
     </div>
     <div class="share-link">
       <strong>お客様に渡す依頼リンク：</strong>
-      <code>{$linkEsc}</code>
+      <code id="reqlink">{$linkEsc}</code>
+      <button class="btn small" type="button" onclick="navigator.clipboard.writeText(document.getElementById('reqlink').innerText);this.innerText='コピーしました ✓'">リンクをコピー</button>
       <p><a class="btn small" href="/r/{$slug}" target="_blank">開いて確認</a></p>
-      <p class="muted">レジ横・名刺・LINEでQRやリンクを配布してください。</p>
+      <p class="muted">レジ横にPOPを印刷して設置、または名刺・LINEでリンクを配布してください。</p>
     </div>
   </div>
 
@@ -228,6 +229,35 @@ HTML;
     return layout($biz['name'] . ' ダッシュボード', $body);
 }
 
+function view_pop(array $biz, string $baseUrl): string
+{
+    $link = $baseUrl . '/r/' . $biz['slug'];
+    $qr = 'https://api.qrserver.com/v1/create-qr-code/?size=500x500&margin=12&data=' . rawurlencode($link);
+    $name = esc($biz['name']);
+    $qrEsc = esc($qr);
+    return <<<HTML
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{$name} 口コミPOP</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="pop">
+  <p class="pop-store">{$name}</p>
+  <h1 class="pop-head">本日の施術は<br>いかがでしたか？</h1>
+  <p class="pop-sub">QRコードを読み取って<br>★で評価をお願いします 🙏</p>
+  <img class="pop-qr" src="{$qrEsc}" alt="口コミQRコード">
+  <p class="pop-foot">スマホのカメラをQRにかざすだけ・約30秒</p>
+  <button class="btn primary no-print pop-print" type="button" onclick="window.print()">この内容を印刷する</button>
+</div>
+</body>
+</html>
+HTML;
+}
+
 function view_rate(array $biz): string
 {
     $slug = esc($biz['slug']);
@@ -240,7 +270,7 @@ function view_rate(array $biz): string
     $body = <<<HTML
   <section class="rate">
     <h1>{$name}</h1>
-    <p class="lead">本日はご来店ありがとうございました。<br>ご満足度を★で教えてください。</p>
+    <p class="lead">本日はご来店ありがとうございました。<br>ご満足度を★で教えてください。<br><span class="muted">（約30秒で完了します）</span></p>
     <form method="POST" action="/r/{$slug}" class="star-form">
       {$buttons}
     </form>

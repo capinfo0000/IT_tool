@@ -120,6 +120,14 @@ if (preg_match('#^/admin/business/(\d+)$#', $path, $m) && $method === 'GET') {
     return;
 }
 
+if (preg_match('#^/admin/business/(\d+)/pop$#', $path, $m) && $method === 'GET') {
+    require_login();
+    $biz = get_business_by_id((int)$m[1]);
+    if (!$biz) { send(view_not_found(), 404); return; }
+    send(view_pop($biz, base_url()));
+    return;
+}
+
 if (preg_match('#^/admin/business/(\d+)$#', $path, $m) && $method === 'POST') {
     require_login();
     $biz = get_business_by_id((int)$m[1]);
