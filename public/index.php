@@ -14,6 +14,15 @@ if (PHP_SAPI === 'cli-server') {
     }
 }
 
+// 静的CSSはどの環境でも配信（Vercel等のPHP-FPMでも動くように）
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET'
+    && parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) === '/style.css'
+    && is_file(__DIR__ . '/style.css')) {
+    header('Content-Type: text/css; charset=utf-8');
+    readfile(__DIR__ . '/style.css');
+    exit;
+}
+
 require __DIR__ . '/../src/db.php';
 require __DIR__ . '/../src/views.php';
 

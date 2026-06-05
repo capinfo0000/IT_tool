@@ -9,8 +9,28 @@ function config(): array
 {
     static $cfg = null;
     if ($cfg !== null) return $cfg;
+
     $real = __DIR__ . '/config.php';
-    $cfg = is_file($real) ? require $real : require __DIR__ . '/config.sample.php';
+    if (is_file($real)) {
+        // ローカル/コアサーバー等：config.php があればそれを使う
+        $cfg = require $real;
+        return $cfg;
+    }
+
+    // config.php が無い場合は環境変数から構築（Vercel等のサーバーレス向け）
+    $driver = getenv('KB_DB_DRIVER') ?: 'sqlite';
+    $cfg = [
+        'admin_password' => getenv('KB_ADMIN_PASSWORD') ?: 'change-me-please',
+        'driver'         => $driver,
+        'sqlite_path'    => __DIR__ . '/../data/db.sqlite',
+        'mysql' => [
+            'host'    => getenv('KB_DB_HOST') ?: 'localhost',
+            'dbname'  => getenv('KB_DB_NAME') ?: '',
+            'user'    => getenv('KB_DB_USER') ?: '',
+            'pass'    => getenv('KB_DB_PASS') ?: '',
+            'charset' => 'utf8mb4',
+        ],
+    ];
     return $cfg;
 }
 
