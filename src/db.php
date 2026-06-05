@@ -1,0 +1,273 @@
+<?php
+/**
+ * データアクセス層（PDO）。
+ * コアサーバーV2 では MySQL、ローカルでは SQLite を同一コードで扱う。
+ * Node版 lib/store.js の機能をそのまま移植したもの。
+ */
+
+function config(): array
+{
+    static $cfg = null;
+    if ($cfg !== null) return $cfg;
+
+    $real = __DIR__ . '/config.php';
+    if (is_file($real)) {
+        // ローカル/コアサーバー等：config.php があればそれを使う
+        $cfg = require $real;
+        return $cfg;
+    }
+
+    // config.php が無い場合は環境変数から構築（Vercel等のサーバーレス向け）
+    $driver = getenv('KB_DB_DRIVER') ?: 'sqlite';
+    $cfg = [
+        'admin_password' => getenv('KB_ADMIN_PASSWORD') ?: 'change-me-please',
+        'driver'         => $driver,
+        'sqlite_path'    => __DIR__ . '/../data/db.sqlite',
+        'mysql' => [
+            'host'    => getenv('KB_DB_HOST') ?: 'localhost',
+            'dbname'  => getenv('KB_DB_NAME') ?: '',
+            'user'    => getenv('KB_DB_USER') ?: '',
+            'pass'    => getenv('KB_DB_PASS') ?: '',
+            'charset' => 'utf8mb4',
+        ],
+    ];
+    return $cfg;
+}
+
+function db(): PDO
+{
+    static $pdo = null;
+    if ($pdo !== null) return $pdo;
+
+    $cfg = config();
+    if (($cfg['driver'] ?? 'sqlite') === 'mysql') {
+        $m = $cfg['mysql'];
+        $dsn = "mysql:host={$m['host']};dbname={$m['dbname']};charset={$m['charset']}";
+        $pdo = new PDO($dsn, $m['user'], $m['pass'], [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+    } else {
+        $path = $cfg['sqlite_path'];
+        if (!is_dir(dirname($path))) mkdir(dirname($path), 0775, true);
+        $pdo = new PDO('sqlite:' . $path, null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+    }
+    return $pdo;
+}
+
+function is_mysql(): bool
+{
+    return (config()['driver'] ?? 'sqlite') === 'mysql';
+}
+
+function init_schema(): void
+{
+    $pk = is_mysql() ? 'INT AUTO_INCREMENT PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+    $slug = is_mysql() ? 'VARCHAR(190)' : 'TEXT';
+    $avgType = is_mysql() ? 'DECIMAL(3,2)' : 'REAL';
+
+    db()->exec("CREATE TABLE IF NOT EXISTS businesses (
+        id $pk,
+        slug $slug NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        google_review_url TEXT,
+        threshold INT NOT NULL DEFAULT 4,
+        mode TEXT NOT NULL DEFAULT 'improve',
+        created_at TEXT NOT NULL
+    )");
+
+    db()->exec("CREATE TABLE IF NOT EXISTS ratings (
+        id $pk,
+        business_id INT NOT NULL,
+        rating INT NOT NULL,
+        routed_to TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )");
+
+    db()->exec("CREATE TABLE IF NOT EXISTS feedback (
+        id $pk,
+        business_id INT NOT NULL,
+        rating INT NOT NULL,
+        message TEXT,
+        contact TEXT,
+        created_at TEXT NOT NULL
+    )");
+
+    // Google口コミの手動記録（将来 Business Profile API が自動で埋める枠）
+    db()->exec("CREATE TABLE IF NOT EXISTS google_snapshots (
+        id $pk,
+        business_id INT NOT NULL,
+        total_count INT NOT NULL,
+        average_rating $avgType NOT NULL,
+        taken_at TEXT NOT NULL
+    )");
+}
+
+function now_iso(): string
+{
+    return (new DateTime('now', new DateTimeZone('Asia/Tokyo')))->format('c');
+}
+
+function normalize_slug(string $s): string
+{
+    $s = strtolower(trim($s));
+    $s = preg_replace('/[^a-z0-9]+/', '-', $s);
+    return trim($s, '-');
+}
+
+function slug_exists(string $slug, ?int $exceptId = null): bool
+{
+    if ($exceptId === null) {
+        $st = db()->prepare("SELECT COUNT(*) AS c FROM businesses WHERE slug = ?");
+        $st->execute([$slug]);
+    } else {
+        $st = db()->prepare("SELECT COUNT(*) AS c FROM businesses WHERE slug = ? AND id <> ?");
+        $st->execute([$slug, $exceptId]);
+    }
+    return ((int)$st->fetch()['c']) > 0;
+}
+
+/** 重複しないスラッグを返す（取られていれば -2, -3 … を付与） */
+function ensure_unique_slug(string $slug, ?int $exceptId = null): string
+{
+    if ($slug === '') $slug = 'shop';
+    $base = $slug;
+    $i = 2;
+    while (slug_exists($slug, $exceptId)) {
+        $slug = $base . '-' . $i;
+        $i++;
+    }
+    return $slug;
+}
+
+// ---- businesses ----
+
+function list_businesses(): array
+{
+    return db()->query("SELECT * FROM businesses ORDER BY created_at DESC")->fetchAll();
+}
+
+function get_business_by_slug(string $slug): ?array
+{
+    $st = db()->prepare("SELECT * FROM businesses WHERE slug = ?");
+    $st->execute([$slug]);
+    $row = $st->fetch();
+    return $row ?: null;
+}
+
+function get_business_by_id($id): ?array
+{
+    $st = db()->prepare("SELECT * FROM businesses WHERE id = ?");
+    $st->execute([(int)$id]);
+    $row = $st->fetch();
+    return $row ?: null;
+}
+
+function create_business(string $name, string $url, int $threshold, string $mode, string $slug = ''): array
+{
+    $mode = $mode === 'compliant' ? 'compliant' : 'improve';
+    $threshold = $threshold ?: 4;
+    $slug = normalize_slug($slug);
+    if ($slug === '') $slug = normalize_slug($name); // 日本語店名は空になるのでフォールバック
+    $slug = ensure_unique_slug($slug);
+    $st = db()->prepare("INSERT INTO businesses (slug, name, google_review_url, threshold, mode, created_at)
+                         VALUES (?, ?, ?, ?, ?, ?)");
+    $st->execute([$slug, trim($name), trim($url), $threshold, $mode, now_iso()]);
+    return get_business_by_slug($slug);
+}
+
+function update_business($id, string $url, int $threshold, string $mode, string $slug = ''): ?array
+{
+    $mode = $mode === 'compliant' ? 'compliant' : 'improve';
+    $threshold = $threshold ?: 4;
+    $slug = normalize_slug($slug);
+    if ($slug !== '') {
+        // スラッグ指定があれば重複を避けて更新
+        $slug = ensure_unique_slug($slug, (int)$id);
+        $st = db()->prepare("UPDATE businesses SET google_review_url = ?, threshold = ?, mode = ?, slug = ? WHERE id = ?");
+        $st->execute([trim($url), $threshold, $mode, $slug, (int)$id]);
+    } else {
+        $st = db()->prepare("UPDATE businesses SET google_review_url = ?, threshold = ?, mode = ? WHERE id = ?");
+        $st->execute([trim($url), $threshold, $mode, (int)$id]);
+    }
+    return get_business_by_id($id);
+}
+
+// ---- ratings / feedback ----
+
+function record_rating(int $businessId, int $rating, string $routedTo): void
+{
+    $st = db()->prepare("INSERT INTO ratings (business_id, rating, routed_to, created_at) VALUES (?, ?, ?, ?)");
+    $st->execute([$businessId, $rating, $routedTo, now_iso()]);
+}
+
+function record_feedback(int $businessId, int $rating, string $message, string $contact): void
+{
+    $st = db()->prepare("INSERT INTO feedback (business_id, rating, message, contact, created_at) VALUES (?, ?, ?, ?, ?)");
+    $st->execute([$businessId, $rating, trim($message), trim($contact), now_iso()]);
+}
+
+function stats_for(int $businessId): array
+{
+    $st = db()->prepare("SELECT rating, routed_to FROM ratings WHERE business_id = ?");
+    $st->execute([$businessId]);
+    $ratings = $st->fetchAll();
+
+    $total = count($ratings);
+    $sum = array_sum(array_map(fn($r) => (int)$r['rating'], $ratings));
+    $avg = $total ? round($sum / $total, 2) : 0;
+    $toGoogle = count(array_filter($ratings, fn($r) => $r['routed_to'] === 'google'));
+    $toPrivate = count(array_filter($ratings, fn($r) => $r['routed_to'] === 'private'));
+
+    $fb = db()->prepare("SELECT * FROM feedback WHERE business_id = ? ORDER BY created_at DESC");
+    $fb->execute([$businessId]);
+
+    return [
+        'total'     => $total,
+        'avg'       => $avg,
+        'toGoogle'  => $toGoogle,
+        'toPrivate' => $toPrivate,
+        'feedback'  => $fb->fetchAll(),
+    ];
+}
+
+// ---- Google口コミの手動スナップショット ----
+
+function add_google_snapshot(int $bizId, int $total, float $avg): void
+{
+    $avg = max(0, min(5, $avg));
+    $total = max(0, $total);
+    $st = db()->prepare("INSERT INTO google_snapshots (business_id, total_count, average_rating, taken_at) VALUES (?, ?, ?, ?)");
+    $st->execute([$bizId, $total, $avg, now_iso()]);
+}
+
+/** 新しい順にスナップショットを返す */
+function get_google_snapshots(int $bizId, int $limit = 12): array
+{
+    $st = db()->prepare("SELECT * FROM google_snapshots WHERE business_id = ? ORDER BY taken_at DESC, id DESC LIMIT ?");
+    $st->bindValue(1, $bizId, PDO::PARAM_INT);
+    $st->bindValue(2, $limit, PDO::PARAM_INT);
+    $st->execute();
+    return $st->fetchAll();
+}
+
+function seed_if_empty(): void
+{
+    // 本番(MySQL)では自動投入しない（まっさらな状態で開始）。ローカル(SQLite)のみデモを投入。
+    if (is_mysql()) return;
+
+    $count = (int)db()->query("SELECT COUNT(*) AS c FROM businesses")->fetch()['c'];
+    if ($count === 0) {
+        $b = create_business('デモ整体院', 'https://search.google.com/local/writereview?placeid=DEMO', 4, 'improve');
+        $id = (int)$b['id'];
+        // デモが映えるよう、サンプルの評価とフィードバックを投入
+        foreach ([5, 5, 4, 5, 5, 4] as $r) record_rating($id, $r, 'google');
+        record_rating($id, 2, 'private');
+        record_rating($id, 3, 'private');
+        record_feedback($id, 2, '受付の待ち時間が少し長く感じました。次回は予約時間を調整してもらえると嬉しいです。', '');
+        record_feedback($id, 3, '駐車場の場所が分かりにくかったです。案内があると助かります。', 'sample@example.com');
+    }
+}
