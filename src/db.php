@@ -236,6 +236,9 @@ function get_google_snapshots(int $bizId, int $limit = 12): array
 
 function seed_if_empty(): void
 {
+    // 本番(MySQL)では自動投入しない（まっさらな状態で開始）。ローカル(SQLite)のみデモを投入。
+    if (is_mysql()) return;
+
     $count = (int)db()->query("SELECT COUNT(*) AS c FROM businesses")->fetch()['c'];
     if ($count === 0) {
         $b = create_business('デモ整体院', 'https://search.google.com/local/writereview?placeid=DEMO', 4, 'improve');
