@@ -1,0 +1,12 @@
+# 実設定（本番DB認証情報）はコミットしない
+src/config.php
+
+# ローカルのSQLiteデータ
+data/*.sqlite
+data/db.json
+
+# プレビュー用に書き出した画面スナップショット
+preview/
+
+*.log
+.DS_Store
